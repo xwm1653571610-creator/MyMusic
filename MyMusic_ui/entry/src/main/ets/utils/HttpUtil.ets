@@ -1,9 +1,8 @@
 import http from '@ohos.net.http';
 
 // 请确保这里的 IP 还是你电脑的局域网真实 IP
-const BASE_URL = 'http://10.159.118.60:3000/api';
+export const BASE_URL = 'http://10.159.118.60:3000/api';
 
-// 1. 明确声明后端返回的数据结构，T 代表 data 的具体类型
 export interface ApiResponse<T> {
     code: number;
     message: string;
@@ -11,18 +10,33 @@ export interface ApiResponse<T> {
 }
 
 export class HttpUtil {
-    /**
-     * 封装 GET 请求，使用泛型 <T> 替代 any
-     */
+    // 内存里维护一个 token 变量，避免每次请求都去读耗时的底层 Preference
+    private static bearerToken: string = '';
+
+    static setToken(t: string) {
+        this.bearerToken = t;
+    }
+
+    static getToken() {
+        return this.bearerToken;
+    }
+
+    private static getHeaders(): Record<string, string> {
+        let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (this.bearerToken) {
+            headers['Authorization'] = `Bearer ${this.bearerToken}`;
+        }
+        return headers;
+    }
+
     static async get<T>(url: string): Promise<ApiResponse<T> | null> {
         const httpRequest = http.createHttp();
         try {
             let response = await httpRequest.request(`${BASE_URL}${url}`, {
                 method: http.RequestMethod.GET,
-                header: { 'Content-Type': 'application/json' },
+                header: this.getHeaders(),
                 expectDataType: http.HttpDataType.OBJECT
             });
-            // 强制类型转换为具体的接口类型
             return response.result as ApiResponse<T>;
         } catch (err) {
             console.error('HTTP GET Error:', JSON.stringify(err));
@@ -32,16 +46,12 @@ export class HttpUtil {
         }
     }
 
-    /**
-     * 封装 POST 请求
-     * data 参数使用 Object 或 string，替代 object/any
-     */
     static async post<T>(url: string, data: Object | string): Promise<ApiResponse<T> | null> {
         const httpRequest = http.createHttp();
         try {
             let response = await httpRequest.request(`${BASE_URL}${url}`, {
                 method: http.RequestMethod.POST,
-                header: { 'Content-Type': 'application/json' },
+                header: this.getHeaders(),
                 extraData: data,
                 expectDataType: http.HttpDataType.OBJECT
             });
