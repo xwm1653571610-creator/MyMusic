@@ -2,6 +2,8 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const express = require('express');
 const cors = require('cors');
+const multer = require('multer');
+const path = require('path');
 const db = require('./db');
 require('dotenv').config();
 
@@ -14,6 +16,25 @@ app.use(express.json()); // 解析 JSON 格式的请求体
 // 托管静态文件，访问路径前面加上 /static
 // 例如：访问 http://localhost:3000/static/audio/yequ.mp3 就能播放音乐
 app.use('/static', express.static('public'));
+
+// 配置 multer 存储策略
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        if (file.fieldname === 'audio') {
+            cb(null, 'public/audio');
+        } else if (file.fieldname === 'cover') {
+            cb(null, 'public/covers');
+        } else {
+            cb(null, 'public');
+        }
+    },
+    filename: function (req, file, cb) {
+        // 使用时间戳防止文件重名
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+});
+const upload = multer({ storage: storage });
 
 
 // --------------------------------------------------
@@ -74,6 +95,50 @@ app.get('/api/songs/:id', async (req, res) => {
         res.json({ code: 200, message: '获取成功', data: rows[0] });
     } catch (error) {
         res.status(500).json({ code: 500, message: '服务器错误', error: error.message });
+    }
+});
+
+
+// POST /api/songs/upload - 上传音乐和封面
+app.post('/api/songs/upload', upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+    try {
+        const { title, artist, album } = req.body;
+        
+        // 校验必填字段
+        if (!title || !artist || !req.files || !req.files['audio']) {
+            return res.status(400).json({ code: 400, message: '歌名、歌手和音频文件不能为空' });
+        }
+
+        const audioFile = req.files['audio'][0];
+        const coverFile = req.files['cover'] ? req.files['cover'][0] : null;
+
+        // 拼接网络访问的完整 URL
+        const protocol = req.protocol;
+        const host = req.get('host');
+        const audioUrl = `${protocol}://${host}/static/audio/${audioFile.filename}`;
+        const coverUrl = coverFile ? `${protocol}://${host}/static/covers/${coverFile.filename}` : null;
+
+        // 插入数据库
+        const [result] = await db.query(
+            'INSERT INTO songs (title, artist, album, audio_url, cover_url) VALUES (?, ?, ?, ?, ?)',
+            [title, artist, album || null, audioUrl, coverUrl]
+        );
+
+        res.json({
+            code: 200,
+            message: '上传成功',
+            data: {
+                id: result.insertId,
+                title,
+                artist,
+                album,
+                audio_url: audioUrl,
+                cover_url: coverUrl
+            }
+        });
+    } catch (error) {
+        console.error('上传失败:', error);
+        res.status(500).json({ code: 500, message: '服务器内部错误', error: error.message });
     }
 });
 
