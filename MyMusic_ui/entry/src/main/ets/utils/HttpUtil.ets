@@ -1,7 +1,7 @@
 import http from '@ohos.net.http';
 
 // 请确保这里的 IP 还是你电脑的局域网真实 IP
-const BASE_URL = 'http://192.168.1.100:3000/api';
+const BASE_URL = 'http://10.159.118.60:3000/api';
 
 // 1. 明确声明后端返回的数据结构，T 代表 data 的具体类型
 export interface ApiResponse<T> {
