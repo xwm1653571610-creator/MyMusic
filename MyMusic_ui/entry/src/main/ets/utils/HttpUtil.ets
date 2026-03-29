@@ -9,24 +9,25 @@ export interface ApiResponse<T> {
     data?: T;
 }
 
+// ArkTS 禁止在静态方法中使用 this，所以用模块级变量代替静态属性
+let bearerToken: string = '';
+
+function getHeaders(): Record<string, string> {
+    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (bearerToken) {
+        headers['Authorization'] = `Bearer ${bearerToken}`;
+    }
+    return headers;
+}
+
 export class HttpUtil {
-    // 内存里维护一个 token 变量，避免每次请求都去读耗时的底层 Preference
-    private static bearerToken: string = '';
 
     static setToken(t: string) {
-        this.bearerToken = t;
+        bearerToken = t;
     }
 
-    static getToken() {
-        return this.bearerToken;
-    }
-
-    private static getHeaders(): Record<string, string> {
-        let headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (this.bearerToken) {
-            headers['Authorization'] = `Bearer ${this.bearerToken}`;
-        }
-        return headers;
+    static getToken(): string {
+        return bearerToken;
     }
 
     static async get<T>(url: string): Promise<ApiResponse<T> | null> {
@@ -34,7 +35,7 @@ export class HttpUtil {
         try {
             let response = await httpRequest.request(`${BASE_URL}${url}`, {
                 method: http.RequestMethod.GET,
-                header: this.getHeaders(),
+                header: getHeaders(),
                 expectDataType: http.HttpDataType.OBJECT
             });
             return response.result as ApiResponse<T>;
@@ -51,7 +52,7 @@ export class HttpUtil {
         try {
             let response = await httpRequest.request(`${BASE_URL}${url}`, {
                 method: http.RequestMethod.POST,
-                header: this.getHeaders(),
+                header: getHeaders(),
                 extraData: data,
                 expectDataType: http.HttpDataType.OBJECT
             });

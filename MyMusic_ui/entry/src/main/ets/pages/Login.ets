@@ -3,24 +3,41 @@ import promptAction from '@ohos.promptAction';
 import { HttpUtil } from '../utils/HttpUtil';
 import { PreferenceUtil } from '../utils/PreferenceUtil';
 
-export interface UserInfo { id: number; username: string; }
-export interface LoginResponseData { token: string; user: UserInfo; }
-export interface RegisterResponseData { userId: number; }
-export interface AuthRequestData { username?: string; password?: string; }
+// 显式声明所有接口，避免 arkts-no-untyped-obj-literals
+export interface UserInfo {
+    id: number;
+    username: string;
+}
+
+export interface LoginResponseData {
+    token: string;
+    user: UserInfo;
+}
+
+export interface RegisterResponseData {
+    userId: number;
+}
+
+export interface AuthRequestData {
+    username: string;
+    password: string;
+}
 
 @Entry
 @Component
 struct Login {
     @State isRegisterMode: boolean = false;
-    @State usernameInput: string = ''; 
+    @State usernameInput: string = '';
     @State passwordInput: string = '';
+    @State isLoading: boolean = false;
 
-    async handleAuth() {
+    async handleAuth(): Promise<void> {
         if (!this.usernameInput || !this.passwordInput) {
-            promptAction.showToast({ message: '请输入账号密码' });
+            promptAction.showToast({ message: '请输入账号和密码' });
             return;
         }
 
+        this.isLoading = true;
         let requestData: AuthRequestData = {
             username: this.usernameInput,
             password: this.passwordInput
@@ -28,6 +45,7 @@ struct Login {
 
         if (this.isRegisterMode) {
             let res = await HttpUtil.post<RegisterResponseData>('/users/register', requestData);
+            this.isLoading = false;
             if (res && res.code === 200) {
                 promptAction.showToast({ message: '注册成功，请登录' });
                 this.isRegisterMode = false;
@@ -36,71 +54,88 @@ struct Login {
             }
         } else {
             let res = await HttpUtil.post<LoginResponseData>('/users/login', requestData);
+            this.isLoading = false;
             if (res && res.code === 200 && res.data) {
-                promptAction.showToast({ message: '登录成功' });
                 await PreferenceUtil.put(getContext(this), 'token', res.data.token);
                 await PreferenceUtil.put(getContext(this), 'userId', res.data.user.id.toString());
                 HttpUtil.setToken(res.data.token);
                 AppStorage.setOrCreate<number>('userId', res.data.user.id);
-                // 登录成功跃迁到主页
                 router.replaceUrl({ url: 'pages/Main' });
             } else {
-                promptAction.showToast({ message: res?.message || '登录失败，请检查账号密码' });
+                promptAction.showToast({ message: res?.message || '登录失败' });
             }
         }
     }
 
     build() {
-        Stack({ alignContent: Alignment.Center }) {
-            // 背景渐变
-            Rect().width('100%').height('100%')
-                .linearGradient({
-                     angle: 45,
-                     colors: [[0x001529, 0.0], [0x00416A, 1.0]]
-                 })
+        Column() {
+            // 顶部logo区域
+            Column({ space: 10 }) {
+                Text('♪')
+                    .fontSize(60)
+                    .fontColor('#007DFF')
 
-            // 玻璃拟态包裹层
-            Column({ space: 25 }) {
-                Text(this.isRegisterMode ? '创建音乐档案' : '欢迎回到 MyMusic')
-                    .fontSize(28).fontWeight(FontWeight.Bolder).fontColor(Color.White)
-                    .margin({ top: 30, bottom: 20 })
+                Text(this.isRegisterMode ? '创建账号' : '欢迎回来')
+                    .fontSize(32)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor('#FFFFFF')
 
-                TextInput({ placeholder: '账号' })
-                    .backgroundColor('rgba(255, 255, 255, 0.15)')
-                    .fontColor(Color.White)
-                    .placeholderColor('#A0A0A0')
-                    .width('85%').height(55)
+                Text(this.isRegisterMode ? '加入 MyMusic 社区' : '登录以继续聆听')
+                    .fontSize(14)
+                    .fontColor('#888888')
+            }
+            .margin({ top: 80, bottom: 50 })
+
+            // 输入区域
+            Column({ space: 18 }) {
+                TextInput({ placeholder: '用户名' })
+                    .width('85%')
+                    .height(52)
+                    .backgroundColor('#1A1A2E')
+                    .fontColor('#FFFFFF')
+                    .placeholderColor('#666666')
                     .borderRadius(12)
-                    .onChange((value) => { this.usernameInput = value })
+                    .onChange((value: string): void => {
+                        this.usernameInput = value;
+                    })
 
                 TextInput({ placeholder: '密码' })
                     .type(InputType.Password)
-                    .backgroundColor('rgba(255, 255, 255, 0.15)')
-                    .fontColor(Color.White)
-                    .placeholderColor('#A0A0A0')
-                    .width('85%').height(55)
+                    .width('85%')
+                    .height(52)
+                    .backgroundColor('#1A1A2E')
+                    .fontColor('#FFFFFF')
+                    .placeholderColor('#666666')
                     .borderRadius(12)
-                    .onChange((value) => { this.passwordInput = value })
+                    .onChange((value: string): void => {
+                        this.passwordInput = value;
+                    })
 
-                Button(this.isRegisterMode ? '立即开通' : '登 录')
-                    .width('85%').height(55)
+                Button(this.isLoading ? '请稍候...' : (this.isRegisterMode ? '注 册' : '登 录'))
+                    .width('85%')
+                    .height(52)
                     .backgroundColor('#007DFF')
-                    .fontSize(18).fontWeight(FontWeight.Bold)
-                    .margin({ top: 20 })
-                    .onClick(() => { this.handleAuth() })
+                    .fontSize(18)
+                    .fontWeight(FontWeight.Bold)
+                    .borderRadius(12)
+                    .margin({ top: 15 })
+                    .enabled(!this.isLoading)
+                    .onClick((): void => {
+                        this.handleAuth();
+                    })
 
                 Text(this.isRegisterMode ? '已有账号？点此登录' : '没有账号？立即注册')
-                    .fontColor('#40A9FF').fontSize(14)
-                    .padding(20)
-                    .onClick(() => { this.isRegisterMode = !this.isRegisterMode; })
+                    .fontColor('#007DFF')
+                    .fontSize(14)
+                    .padding(15)
+                    .onClick((): void => {
+                        this.isRegisterMode = !this.isRegisterMode;
+                    })
             }
-            .width('85%')
-            .padding({ bottom: 40 })
-            .backgroundColor('rgba(0, 0, 0, 0.35)') // 半透明毛玻璃底色
-            .borderRadius(20)
-            .shadow({ radius: 30, color: 'rgba(0, 0, 0, 0.5)', offsetY: 10 })
-            .backdropBlur(25) // 高级玻璃拟态特效
         }
-        .width('100%').height('100%')
+        .width('100%')
+        .height('100%')
+        .backgroundColor('#0D0D0D')
+        .alignItems(HorizontalAlign.Center)
     }
 }
